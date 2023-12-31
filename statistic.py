@@ -1,18 +1,25 @@
+import datetime
+import config
 import requests
 import json
+import csv
 
 # Define the API endpoint
 url = "https://api.elsevier.com/content/search/scopus"
 
 # Define the headers
 headers = {
-    "X-ELS-APIKey": "e7a6bb9ac93a6622119aa31d5194f01c",
+    "X-ELS-APIKey": config.API_KEY,
     "Accept": "application/json"
 }
 
 # Define the parameters
+# If query by VNU institution, use AF-ID(60071364)
+# If query by UET institution, use AF-ID(60071365)
+# If query by VNUHN institution, use AF-ID(60071366)
+# If query by VNU-UET institution, use AF-ID(60071367)
 params = {
-    "query": "AFFIL(Vietnam National University, Hanoi)",
+    "query": "AFFILCOUNTRY(Viet Nam) AND PUBYEAR IS 2023",
     "count": 25  # maximum number of results per request
 }
 
@@ -25,6 +32,9 @@ data = json.loads(response.text)
 # Extract the total number of results
 total_results = int(data['search-results']['opensearch:totalResults'])
 
+# Print the total number of results
+print(f"The total number of articles is: {total_results}")
+
 # Calculate the total number of pages
 total_pages = total_results // params['count']
 if total_results % params['count'] > 0:
@@ -33,23 +43,40 @@ if total_results % params['count'] > 0:
 # Print the total number of pages
 print(f"Total pages: {total_pages}")
 
-# Loop through all pages
-for page in range(total_pages):
-    # Update the 'start' parameter for pagination
-    params['start'] = page * params['count']
+# define csv file name follow the date time
+csv_file_name = "articles_" + str(datetime.datetime.now()) + ".csv"
+# Open a file for writing
+with open(csv_file_name, 'w', newline='', encoding='utf-8') as file:
+    writer = csv.writer(file)
+    writer.writerow(["Title", "Authors", "Affiliations"])
 
-    # Make the GET request for the current page
-    response = requests.get(url, headers=headers, params=params)
+    # Loop through all pages
+    for page in range(total_pages):
+        # Update the 'start' parameter for pagination
+        params['start'] = page * params['count']
 
-    # Parse the response to JSON
-    data = json.loads(response.text)
+        try:
+            # Make the GET request for the current page
+            response = requests.get(url, headers=headers, params=params)
 
-    # Process the data as needed
-    # Check if 'search-results' is in the data
-    if 'search-results' in data:
-        # Process the data as needed
-        print(f"Page {page + 1}: {len(data['search-results']['entry'])} results")
-    else:
-        print(f"Page {page + 1}: No results")
+            # Parse the response to JSON
+            data = json.loads(response.text)
 
-print(f"The total number of articles is: {total_results}")
+            # Check if 'search-results' is in the data
+            if 'search-results' in data:
+                # Loop through each article in the current page
+                for article in data['search-results']['entry']:
+                    try:
+                        # Extract the desired information
+                        title = article['dc:title']
+                        authors = article['dc:creator']
+                        affiliations = article['affiliation'] if 'affiliation' in article else 'No affiliation'
+
+                        # Write the information to the file
+                        writer.writerow([title, authors, affiliations])
+                    except Exception as e:
+                        print(f"Error extracting data from article: {e}")
+            else:
+                print(f"Page {page + 1}: No results")
+        except Exception as e:
+            print(f"Error making API request: {e}")
