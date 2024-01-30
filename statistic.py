@@ -3,6 +3,8 @@ import config
 import requests
 import json
 import csv
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 # Define the API endpoint
 url = "https://api.elsevier.com/content/search/scopus"
@@ -44,7 +46,7 @@ if total_results % params['count'] > 0:
 print(f"Total pages: {total_pages}")
 
 # define csv file name follow the date time
-csv_file_name = "articles_" + str(datetime.datetime.now()) + ".csv"
+csv_file_name = "articles_" + datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S") + ".csv"
 # Open a file for writing
 with open(csv_file_name, 'w', newline='', encoding='utf-8') as file:
     writer = csv.writer(file)
@@ -57,7 +59,13 @@ with open(csv_file_name, 'w', newline='', encoding='utf-8') as file:
 
         try:
             # Make the GET request for the current page
-            response = requests.get(url, headers=headers, params=params)
+            session = requests.Session()
+            retry = Retry(total=5, backoff_factor=0.1, status_forcelist=[ 500, 502, 503, 504 ])
+            adapter = HTTPAdapter(max_retries=retry)
+            session.mount('http://', adapter)
+            session.mount('https://', adapter)
+
+            response = session.get(url, headers=headers, params=params)
 
             # Parse the response to JSON
             data = json.loads(response.text)

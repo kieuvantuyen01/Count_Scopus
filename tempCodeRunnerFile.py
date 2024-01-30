@@ -1,0 +1,1 @@
+response = requests.get(url, headers=headers, params=params, timeout=10)
